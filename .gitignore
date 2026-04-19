@@ -1,0 +1,17 @@
+# Virtual environment
+venv/
+
+# Raw datasets (large binary files)
+data/raw/
+
+# Compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# OS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
