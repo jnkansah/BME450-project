@@ -22,6 +22,8 @@ def main():
                         help="Train CNN models before running the detector")
     parser.add_argument("--epochs", type=int, default=20,
                         help="Training epochs (used with --train)")
+    parser.add_argument("--max_samples", type=int, default=0,
+                        help="Max images per class to use for training (0 = all)")
     parser.add_argument("--task", default="all",
                         choices=["eye", "mouth", "drowsy", "all"],
                         help="Which model to train (used with --train)")
@@ -29,9 +31,11 @@ def main():
 
     if args.train:
         from src.train import train_one_task
+        from src.config import LR, BATCH_SIZE
         tasks = ["eye", "mouth", "drowsy"] if args.task == "all" else [args.task]
         for task in tasks:
-            train_one_task(task, args.epochs)
+            train_one_task(task, args.epochs, LR, BATCH_SIZE, max_samples=args.max_samples)
+        return
 
     from src.detector import run
     src = int(args.source) if args.source.isdigit() else args.source

@@ -51,7 +51,7 @@ def _label_from_folder(name: str, mapping_pairs):
     return -1
 
 
-def _collect_images(root: str, mapping_pairs, min_per_class=0):
+def _collect_images(root: str, mapping_pairs, max_per_class=0):
     """
     Walk root recursively.  For each leaf folder whose name matches a keyword,
     collect (path, label) pairs.
@@ -68,12 +68,11 @@ def _collect_images(root: str, mapping_pairs, min_per_class=0):
             if os.path.splitext(f)[1].lower() in IMG_EXTS:
                 buckets[label].append(os.path.join(dirpath, f))
 
-    # balance classes if requested
-    if min_per_class > 0:
-        n = min(len(v) for v in buckets.values() if v)
+    # balance classes or limit samples if requested
+    if max_per_class > 0:
         for k in buckets:
             random.shuffle(buckets[k])
-            buckets[k] = buckets[k][:n]
+            buckets[k] = buckets[k][:max_per_class]
 
     pairs = []
     for label, paths in buckets.items():
@@ -81,28 +80,28 @@ def _collect_images(root: str, mapping_pairs, min_per_class=0):
     return pairs
 
 
-def discover_eye_dataset(raw_dir: str = RAW_DIR):
+def discover_eye_dataset(raw_dir: str = RAW_DIR, max_per_class: int = 0):
     mapping = [
         (EYE_OPEN_KEYWORDS,   0),
         (EYE_CLOSED_KEYWORDS, 1),
     ]
-    return _collect_images(raw_dir, mapping)
+    return _collect_images(raw_dir, mapping, max_per_class=max_per_class)
 
 
-def discover_mouth_dataset(raw_dir: str = RAW_DIR):
+def discover_mouth_dataset(raw_dir: str = RAW_DIR, max_per_class: int = 0):
     mapping = [
         (NO_YAWN_KEYWORDS, 0),
         (YAWN_KEYWORDS,    1),
     ]
-    return _collect_images(raw_dir, mapping)
+    return _collect_images(raw_dir, mapping, max_per_class=max_per_class)
 
 
-def discover_drowsy_dataset(raw_dir: str = RAW_DIR):
+def discover_drowsy_dataset(raw_dir: str = RAW_DIR, max_per_class: int = 0):
     mapping = [
         (ALERT_KEYWORDS,  0),
         (DROWSY_KEYWORDS, 1),
     ]
-    return _collect_images(raw_dir, mapping)
+    return _collect_images(raw_dir, mapping, max_per_class=max_per_class)
 
 
 def train_val_test_split(pairs, train=0.80, val=0.10, seed=SEED):

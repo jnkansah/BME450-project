@@ -59,21 +59,21 @@ def evaluate(model, loader, device):
     return avg_loss, accuracy, all_preds, all_labels
 
 
-def train_one_task(task: str, epochs: int, raw_dir: str = RAW_DIR):
+def train_one_task(task: str, epochs: int, lr: float = LR, batch_size: int = BATCH_SIZE, raw_dir: str = RAW_DIR, max_samples: int = 0):
     """Train a DrowsyCNN for the given task. Returns final test accuracy."""
     print(f"\n{'='*60}")
-    print(f"  Training task: {task.upper()}")
+    print(f"  Training task: {task.upper()} (LR={lr}, Batch={batch_size}, MaxSamples={max_samples if max_samples > 0 else 'All'})")
     print(f"{'='*60}")
 
     # --- Discover data ---
     if task == "eye":
-        pairs = discover_eye_dataset(raw_dir)
+        pairs = discover_eye_dataset(raw_dir, max_per_class=max_samples)
         class_names = ["open", "closed"]
     elif task == "mouth":
-        pairs = discover_mouth_dataset(raw_dir)
+        pairs = discover_mouth_dataset(raw_dir, max_per_class=max_samples)
         class_names = ["no_yawn", "yawn"]
     elif task == "drowsy":
-        pairs = discover_drowsy_dataset(raw_dir)
+        pairs = discover_drowsy_dataset(raw_dir, max_per_class=max_samples)
         class_names = ["alert", "drowsy"]
     else:
         raise ValueError(f"Unknown task: {task}")
@@ -94,11 +94,11 @@ def train_one_task(task: str, epochs: int, raw_dir: str = RAW_DIR):
     val_ds   = ImagePairDataset(val_p,   augment=False)
     test_ds  = ImagePairDataset(test_p,  augment=False)
 
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                                num_workers=0, pin_memory=False)
-    val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False,
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False,
                                num_workers=0)
-    test_loader  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False,
+    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False,
                                num_workers=0)
 
     device = torch.device("mps" if torch.backends.mps.is_available()
@@ -107,7 +107,7 @@ def train_one_task(task: str, epochs: int, raw_dir: str = RAW_DIR):
     print(f"  Device: {device}")
 
     model = DrowsyCNN(num_classes=2).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", patience=3, factor=0.5
     )
@@ -152,8 +152,14 @@ def train_one_task(task: str, epochs: int, raw_dir: str = RAW_DIR):
     model.load_state_dict(torch.load(best_path, map_location=device))
     test_loss, test_acc, preds, labels = evaluate(model, test_loader, device)
     print(f"\n  Test accuracy: {test_acc:.4f}")
-    print(classification_report(labels, preds, target_names=class_names,
-                                 zero_division=0))
+    
+    # Only print report if both classes are present in the test set
+    unique_labels = sorted(list(set(labels)))
+    if len(unique_labels) == len(class_names):
+        print(classification_report(labels, preds, target_names=class_names,
+                                     zero_division=0))
+    else:
+        print(f"  [INFO] Skipping classification report: test set only contains labels {unique_labels}")
 
     # Save history
     hist_path = os.path.join(MODELS_DIR, f"{task}_history.json")
@@ -170,12 +176,14 @@ def main():
                         choices=["eye", "mouth", "drowsy", "all"])
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--raw_dir", default=RAW_DIR)
+    parser.add_argument("--max_samples", type=int, default=0,
+                        help="Max images per class to use for training (0 = all)")
     args = parser.parse_args()
 
     tasks = ["eye", "mouth", "drowsy"] if args.task == "all" else [args.task]
     results = {}
     for task in tasks:
-        acc = train_one_task(task, args.epochs, args.raw_dir)
+        acc = train_one_task(task, args.epochs, LR, BATCH_SIZE, args.raw_dir, args.max_samples)
         if acc is not None:
             results[task] = acc
 
